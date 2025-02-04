@@ -4,7 +4,21 @@
 SHDIR=$(dirname "$(realpath "$0")")
 TEMPDIR="$SHDIR/temp"
 
-GRUB_FILE="$TEMPDIR/grub"
+GRUB_FILE="/etc/default/grub"
+TESTMODE=false
+
+for arg in "$@"; do
+    case $arg in
+    --test)
+        GRUB_FILE="$TEMPDIR/grub"
+        TESTMODE=true
+        ;;
+    *)
+        echo "Invalid option: $arg"
+        exit 1
+        ;;
+    esac
+done
 
 # Ascii header :)
 show_header() {
@@ -22,8 +36,10 @@ EOF
 }
 
 show_description() {
-    echo
-    echo
+    if $TESTMODE; then
+        echo
+        echo "test mode enabled!"
+    fi
 }
 
 create_backup() {
@@ -54,8 +70,10 @@ check_grub() {
     fi
 
     if $found; then
+
         return 0
     else
+        echo "intel.idle options not found"
         return 1
     fi
 }
@@ -72,7 +90,7 @@ grub_clear() {
         sed -i "s|GRUB_CMDLINE_LINUX=.*|$line|" "$GRUB_FILE"
         echo "intel.idle options clear"
     else
-        echo "intel.idle options not found"
+        echo
     fi
 }
 
@@ -116,10 +134,18 @@ update_grub() {
     esac
 }
 
+check_sudo() {
+    if [[ "$TESTMODE" != "true" && $(id -u) -ne 0 ]]; then
+        echo "Error: this script must be run as root!" >&2
+        exit 1
+    fi
+
+}
+
 show_menu() {
     echo "Actions:"
     echo
-    echo "c) Check paths"
+    echo "c) Check options"
     echo
     echo "1) Add 'max_cstate' options to grub"
     echo "2) Add 'states_off' options to grub"
@@ -131,14 +157,15 @@ show_menu() {
 }
 
 main() {
-    clear
+    check_sudo
 
-    echo
-    show_description
+    clear
 
     while true; do
         show_header
+        show_description
         show_menu
+
         read -p "Input: " choice
         echo
 
@@ -169,7 +196,10 @@ main() {
             *) echo "Eror: invalid input" ;;
             esac
             ;;
-        3) grub_clear ;;
+        3)
+            create_backup "$GRUB_FILE"
+            grub_clear
+            ;;
         9) updade_grub ;;
 
         q)
